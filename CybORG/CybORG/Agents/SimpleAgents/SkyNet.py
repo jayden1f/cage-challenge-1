@@ -174,25 +174,14 @@ class SkyNetBase(BaseAgent):
         next_values = self.Critic.predict(next_states)
 
         # Compute discounted rewards and advantages
-        #discounted_r = self.discount_rewards(rewards)
-        #advantages = np.vstack(discounted_r - values)
         advantages, target = self.get_gaes(rewards, dones, np.squeeze(values), np.squeeze(next_values))
-        '''
-        pylab.plot(advantages,'.')
-        pylab.plot(target,'-')
-        ax=pylab.gca()
-        ax.grid(True)
-        pylab.subplots_adjust(left=0.05, right=0.98, top=0.96, bottom=0.06)
-        pylab.show()
-        '''
+
         # stack everything to numpy array
         # pack all advantages, predictions and actions to y_true and when they are received
         # in custom PPO loss function we unpack it
         advantages.resize(self.x_value,54)
         self.x_value += 1
-        
-        #advantages[0,0] = advantages[1,0]
-        #advantages[1,0] = 54
+
         y_true = np.hstack([advantages, predictions, actions])
         
         # training Actor and Critic networks
@@ -206,10 +195,6 @@ class SkyNetBase(BaseAgent):
         self.replay_count += 1
         
     def get_gaes(self, rewards, dones, values, next_values, gamma = 0.99, lamda = 0.9, normalize=True):
-        #r,d,nv,v = np.array(rewards),np.array(dones),next_values,values
-        #print(rewards, dones, next_values, values)
-        #print(str(np.array(rewards).shape),str(np.array(dones).shape),str(next_values.shape),str(values.shape))
-        #deltas = [r + gamma * (1 - d) * nv - v]
         r = rewards
         nv = next_values
         v = values
@@ -218,7 +203,6 @@ class SkyNetBase(BaseAgent):
         else:
             d = 1
         deltas = [r + gamma * (1 - d) * nv - v] 
-        '''for r, d, nv, v in zip(rewards,dones, next_values, values)'''
         deltas = np.stack(deltas)
         gaes = copy.deepcopy(deltas)
         for t in reversed(range(len(deltas) - 1)):
@@ -237,16 +221,7 @@ class SkyNetBase(BaseAgent):
         result>>> 1, because it have the highest probability to be taken
         """
         # Use the network to predict the next action to take, using the model
-        #print(state.shape,"state")
         prediction = self.Actor.predict(state)[0]
-        #print(prediction)
-        '''np.temparray=[]
-        for i in np.nditer(prediction):
-            if i < np.float32(0.00000000):
-                np.temparray.append(0.00000000)
-            else:
-                np.temparray.append(i)
-        prediction = np.temparray'''
         action = self.Actor.predict(state)
         action = np.random.choice(self.action_size, p=prediction)
    
@@ -279,7 +254,6 @@ class SkyNetBase(BaseAgent):
                     next_state, reward, done, _ = self.env.step(action)
                     # Memorize (state, action, reward) for training
                     states.append(state)
-                    print()
                     next_states.append(np.reshape(next_state, [1, self.state_size[0]]))
                     actions.append(action_onehot)
                     rewards.append(reward)
@@ -311,7 +285,7 @@ class SkyNetBase(BaseAgent):
                     self.save()
                     self.env.reset()
                     if temp == self.goes:
-                        print("Round:", temp, "Final Score:", total_score, "Deviation:", total_dev)    
+                        print("Round:", temp,"Steps:", self.EPISODES*self.goes, "Final Score:", total_score, "Deviation:", total_dev)    
         
     def PlotModel(self, score, episode):
         self.scores_.append(score)

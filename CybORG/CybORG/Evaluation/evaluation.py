@@ -1,8 +1,10 @@
 import inspect
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import time
 from statistics import mean, stdev
 import tensorflow as tf
+tf.config.run_functions_eagerly(True)
 from CybORG import CybORG
 from CybORG.Agents import B_lineAgent, SleepAgent
 from CybORG.Agents.SimpleAgents.BaseAgent import BaseAgent
@@ -16,8 +18,6 @@ from CybORG.Agents.Wrappers.OpenAIGymWrapper import OpenAIGymWrapper
 from CybORG.Agents.Wrappers.ReduceActionSpaceWrapper import ReduceActionSpaceWrapper
 from CybORG.Agents.Wrappers import ChallengeWrapper
 import numpy as np
-
-tf.config.experimental_run_functions_eagerly(True)
 
 MAX_EPS = 10
 agent_name = 'Blue'
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     # Change this line to load your agent
     agent = SkyNetBase()
 
-    print(f'Using agent {agent.__class__.__name__}, if this is incorrect please update the code to load in your agent')
+    print(f'Using agent {agent.__class__.__name__}\n')
 
     file_name = str(inspect.getfile(CybORG))[:-10] + '/Evaluation/' + time.strftime("%Y%m%d_%H%M%S") + f'_{agent.__class__.__name__}.txt'
     print(f'Saving evaluation results to {file_name}')
@@ -79,21 +79,14 @@ if __name__ == "__main__":
             for i in range(MAX_EPS):
                 r = []
                 a = []
-                # cyborg.env.env.tracker.render()
                 for j in range(num_steps):
-                    #print(observation.shape)
                     action, predictions = agent.get_action(observation, action_space)
                     observation, rew, done, info = wrapped_cyborg.step(action)
-                    #print(type(observation))
-                    # result = cyborg.step(agent_name, action)
                     r.append(rew)
-                    # r.append(result.reward)
                     a.append((str(cyborg.get_last_action('Blue')), str(cyborg.get_last_action('Red'))))
-                    #SkyNetBase.replay(agent,obs, action, rew, predictions, done, observation)
                     obs = observation
                 total_reward.append(sum(r))
                 actions.append(a)
-                # observation = cyborg.reset().observation
                 observation = wrapped_cyborg.reset()
             print(90*'-')
             print ("{:<15} {:<25} {:<20} {:<10}".format(red_agent.__name__ , mean(total_reward) , stdev(total_reward)  , num_steps))
