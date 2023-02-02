@@ -5,35 +5,31 @@ Developed:  Sky TianYi Zhang
             Mitchell Knyn
             Jayden Fowler
             
-Reference: pythonlessons
+Reference: pythonlessons https://pylessons.com/LunarLander-v2-PPO
 
 Last Modified: 2 Feb 2023
 '''
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import copy
+import pylab
+import numpy as np
+import inspect
 import tensorflow as tf
+tf.config.run_functions_eagerly(True)
 from tensorflow.keras.layers import Input, Dense
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.optimizers import Adam, RMSprop
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorboardX import SummaryWriter
-import inspect
 from CybORG import CybORG
-from stable_baselines3 import PPO
-from CybORG.Agents.SimpleAgents.BaseAgent import BaseAgent
 from CybORG.Agents.Wrappers.EnumActionWrapper import EnumActionWrapper
 from CybORG.Agents.Wrappers.FixedFlatWrapper import FixedFlatWrapper
 from CybORG.Agents.Wrappers.OpenAIGymWrapper import OpenAIGymWrapper
 from CybORG.Agents.Wrappers.ReduceActionSpaceWrapper import ReduceActionSpaceWrapper
-from CybORG.Agents import B_lineAgent, SleepAgent
-from CybORG.Agents.SimpleAgents.Meander import RedMeanderAgent
-import numpy as np
-import os
-import sys
-import copy
-import pylab
-import time
-
-tf.config.experimental_run_functions_eagerly(True)
+from CybORG.Agents.SimpleAgents.BaseAgent import BaseAgent
+from CybORG.Agents import B_lineAgent, SleepAgent, RedMeanderAgent
 
 critic_ppo_path = str(inspect.getfile(CybORG))
 critic_ppo_path = critic_ppo_path[:-10] + "/Evaluation/"
@@ -53,8 +49,7 @@ class Environment():
         return cyborg
     
     def __init__(self):
-        env = self.create_env()
-        #model = PPO("MlpPolicy", env)
+        self.create_env()
 
 class Actor_Model:
     def __init__(self, input_shape, action_space, lr, optimizer):
@@ -123,8 +118,8 @@ class SkyNetBase(BaseAgent):
     def __init__(self):
         path = str(inspect.getfile(CybORG))
         path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml' 
-        #env = (CybORG(path, 'sim',agents={'Red': SleepAgent}))
-        env = (CybORG(path, 'sim'))
+        env = (CybORG(path, 'sim',agents={'Red': B_lineAgent}))
+        #env = (CybORG(path, 'sim'))
         cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
         self.env = cyborg
         self.env_name = 'CybORG'
@@ -254,8 +249,7 @@ class SkyNetBase(BaseAgent):
         prediction = np.temparray'''
         action = self.Actor.predict(state)
         action = np.random.choice(self.action_size, p=prediction)
-        #print(action, "action")
-        #print(action)
+   
         action_onehot = np.zeros([self.action_size])
         action_onehot[action] = 1
         return action, action_onehot, prediction
@@ -263,7 +257,7 @@ class SkyNetBase(BaseAgent):
     def run(self): # train only when episode is finished
         state = self.env.reset()
         state = np.reshape(state, [1, self.state_size[0]])
-        done, score, SAVING = False, 0, ''
+        done, score = False, 0
         temp = 0
         total_score=0
         total_dev=0
@@ -296,7 +290,7 @@ class SkyNetBase(BaseAgent):
                     score += reward
                     self.episode += 1
                     #print(dones[self.episode - 1])
-                    average, SAVING = self.PlotModel(score, self.episode)
+                    average = self.PlotModel(score, self.episode)
                     print("Round: {}, episode: {}/{}, score: {}, average: {:.2f}".format(temp, self.episode, self.EPISODES, score, average))
                     total_score += score
                     total_dev += average
@@ -306,7 +300,7 @@ class SkyNetBase(BaseAgent):
                     
                     self.replay(states, actions, rewards, predictions, dones, next_states)
 
-                    state, done, score, SAVING = self.env.reset(), False, 0, ''
+                    state, done, score = self.env.reset(), False, 0
                     state = np.reshape(state, [1, self.state_size[0]])
 
                 if self.episode >= self.EPISODES:
@@ -338,15 +332,12 @@ class SkyNetBase(BaseAgent):
         if self.average_[-1] >= self.max_average:
             self.max_average = self.average_[-1]
             self.save()
-            SAVING = "SAVING"
             # decreaate learning rate every saved model
             self.lr *= 0.95
             K.set_value(self.Actor.Actor.optimizer.learning_rate, self.lr)
             K.set_value(self.Critic.Critic.optimizer.learning_rate, self.lr)
-        else:
-            SAVING = ""
 
-        return self.average_[-1], SAVING
+        return self.average_[-1]
         
     def get_action(self,state,action_space):
         state = np.reshape(state,(1,11293))
