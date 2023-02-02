@@ -1,10 +1,12 @@
 import inspect
+import os
 import time
 from statistics import mean, stdev
-
+import tensorflow as tf
 from CybORG import CybORG
 from CybORG.Agents import B_lineAgent, SleepAgent
 from CybORG.Agents.SimpleAgents.BaseAgent import BaseAgent
+from CybORG.Agents.SimpleAgents.SkyNet import SkyNetBase
 from CybORG.Agents.SimpleAgents.BlueLoadAgent import BlueLoadAgent
 from CybORG.Agents.SimpleAgents.BlueReactAgent import BlueReactRemoveAgent
 from CybORG.Agents.SimpleAgents.Meander import RedMeanderAgent
@@ -13,6 +15,9 @@ from CybORG.Agents.Wrappers.FixedFlatWrapper import FixedFlatWrapper
 from CybORG.Agents.Wrappers.OpenAIGymWrapper import OpenAIGymWrapper
 from CybORG.Agents.Wrappers.ReduceActionSpaceWrapper import ReduceActionSpaceWrapper
 from CybORG.Agents.Wrappers import ChallengeWrapper
+import numpy as np
+
+tf.config.experimental_run_functions_eagerly(True)
 
 MAX_EPS = 10
 agent_name = 'Blue'
@@ -38,7 +43,7 @@ if __name__ == "__main__":
     wrap_line = lines.split('\n')[1].split('return ')[1]
 
     # Change this line to load your agent
-    agent = BlueLoadAgent()
+    agent = SkyNetBase()
 
     print(f'Using agent {agent.__class__.__name__}, if this is incorrect please update the code to load in your agent')
 
@@ -63,23 +68,29 @@ if __name__ == "__main__":
             wrapped_cyborg = wrap(cyborg)
 
             observation = wrapped_cyborg.reset()
-            # observation = cyborg.reset().observation
+            # observation = cyborg.reset().o112bservation
 
             action_space = wrapped_cyborg.get_action_space(agent_name)
             # action_space = cyborg.get_action_space(agent_name)
             total_reward = []
             actions = []
+            obs = [1,11293]
+            obs = np.empty(obs)
             for i in range(MAX_EPS):
                 r = []
                 a = []
                 # cyborg.env.env.tracker.render()
                 for j in range(num_steps):
-                    action = agent.get_action(observation, action_space)
+                    #print(observation.shape)
+                    action, predictions = agent.get_action(observation, action_space)
                     observation, rew, done, info = wrapped_cyborg.step(action)
+                    #print(type(observation))
                     # result = cyborg.step(agent_name, action)
                     r.append(rew)
                     # r.append(result.reward)
                     a.append((str(cyborg.get_last_action('Blue')), str(cyborg.get_last_action('Red'))))
+                    #SkyNetBase.replay(agent,obs, action, rew, predictions, done, observation)
+                    obs = observation
                 total_reward.append(sum(r))
                 actions.append(a)
                 # observation = cyborg.reset().observation
@@ -93,5 +104,6 @@ if __name__ == "__main__":
                 for act, sum_rew in zip(actions, total_reward):
                     data.write(f'actions: {act}, total reward: {sum_rew}\n')
     print(90*'-')
-    print("Total Score:", totalAvg/9, "+-", totalStd/9)
+    print("Total Score:", totalAvg, "+-", totalStd)
     print('\n')
+
