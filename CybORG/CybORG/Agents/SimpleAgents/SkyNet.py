@@ -7,7 +7,7 @@ Developed:  Sky TianYi Zhang
             
 Reference: pythonlessons https://pylessons.com/LunarLander-v2-PPO
 
-Last Modified: 2 Feb 2023
+Last Modified: 7 Feb 2023
 '''
 
 import os
@@ -135,7 +135,7 @@ class SkyNetBase(BaseAgent):
         self.optimizer = Adam
         self.x_value = 1
         self.y_value = 1
-        self.goes = 5
+        self.goes = 10  #10 is max before crashing
         self.Actor_name = "PPO_Actor.h5"
         self.Critic_name = "PPO_Critic.h5"
         
