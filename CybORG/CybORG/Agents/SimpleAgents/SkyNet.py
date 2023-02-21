@@ -11,62 +11,51 @@ Last Modified: 14 Feb 2023
 '''
 
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  #Suppress warning messages
 import copy
 import pylab
 import numpy as np
 import inspect
 import tensorflow as tf
-tf.config.run_functions_eagerly(True)
+tf.config.run_functions_eagerly(True)     #Suppress warning messages
 from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
-from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter 
 from CybORG import CybORG
 from CybORG.Agents.Wrappers.EnumActionWrapper import EnumActionWrapper
 from CybORG.Agents.Wrappers.FixedFlatWrapper import FixedFlatWrapper
 from CybORG.Agents.Wrappers.OpenAIGymWrapper import OpenAIGymWrapper
 from CybORG.Agents.Wrappers.ReduceActionSpaceWrapper import ReduceActionSpaceWrapper
 from CybORG.Agents.SimpleAgents.BaseAgent import BaseAgent
-from CybORG.Agents import B_lineAgent, SleepAgent, RedMeanderAgent
+from CybORG.Agents import B_lineAgent, SleepAgent, RedMeanderAgent #Import all three red agent 
 
-critic_ppo_path = str(inspect.getfile(CybORG))
-critic_ppo_path = critic_ppo_path[:-10] + "/Evaluation/"
-actor_ppo_path = str(inspect.getfile(CybORG))
+critic_ppo_path = str(inspect.getfile(CybORG)) #Used to find ppo file path ignoring user's name and directory
+critic_ppo_path = critic_ppo_path[:-10] + "/Evaluation/" #Under the evaluation folder
+actor_ppo_path = str(inspect.getfile(CybORG)) 
 actor_ppo_path = actor_ppo_path[:-10] + "/Evaluation/"
 path = str(inspect.getfile(CybORG))
-path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml' 
-env = (CybORG(path, 'sim'))
-cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
-
-class Environment():
-    def create_env(self):
-        path = str(inspect.getfile(CybORG))
-        path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml' 
-        env = (CybORG(path, 'sim'))
-        cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
-        return cyborg
-    
-    def __init__(self):
-        self.create_env()
+path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml'  #Find the Scenario1b.yaml and locate it's path
+env = (CybORG(path, 'sim')) #Load the Scenario1b.yaml into the environment
+cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env)))) #Use wrapper to wrap the environment into cyborg environment
 
 class Actor_Model:
     def __init__(self, input_shape, action_space, lr, optimizer):
-        X_input = Input(input_shape)
-        self.action_space = action_space
-        
+        X_input = Input(input_shape) #Define input shape
+        self.action_space = action_space #Total number of possible actions avaiable in the current environment, which is 54 (blue agent)
+        #Three layers of neural network with 512, 256, 64
         X = Dense(512, activation="relu", kernel_initializer=tf.random_normal_initializer(stddev=0.01))(X_input)
         X = Dense(256, activation="relu", kernel_initializer=tf.random_normal_initializer(stddev=0.01))(X)
-        X = Dense(64, activation="relu", kernel_initializer=tf.random_normal_initializer(stddev=0.01))(X)
-        output = Dense(self.action_space, activation="softmax")(X)
+        X = Dense(64, activation="relu", kernel_initializer=tf.random_normal_initializer(stddev=0.01))(X) #Classification layer 
+        output = Dense(self.action_space, activation="softmax")(X) #Total number of output nodes of the neural network
 
         self.Actor = Model(inputs=X_input, outputs = output)
-        self.Actor.compile(loss=self.ppo_loss_continuous, optimizer=optimizer(lr=lr))
+        self.Actor.compile(loss=self.ppo_loss_continuous, optimizer=optimizer(lr=lr)) #learn and correct actions of the agent
 
     def ppo_loss_continuous(self, y_true, y_pred):
         advantages, actions, logp_old_ph, = y_true[:, :1], y_true[:, 1:1+self.action_space], y_true[:, 1+self.action_space]
-        LOSS_CLIPPING = 0.2
+        LOSS_CLIPPING = 0.2 #Customised loss setting it to maximum percent 20% only
         logp = self.gaussian_likelihood(actions, y_pred)
 
         ratio = K.exp(logp - logp_old_ph)
@@ -74,7 +63,7 @@ class Actor_Model:
         p1 = ratio * advantages
         p2 = tf.where(advantages > 0, (1.0 + LOSS_CLIPPING)*advantages, (1.0 - LOSS_CLIPPING)*advantages) # minimum advantage
 
-        actor_loss = -K.mean(K.minimum(p1, p2))
+        actor_loss = -K.mean(K.minimum(p1, p2)) #Calculate by getting a negative mean of element wise minimum value of p1 and p2
 
         return actor_loss
 
@@ -119,7 +108,6 @@ class SkyNetBase(BaseAgent):
         path = str(inspect.getfile(CybORG))
         path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml' 
         env = (CybORG(path, 'sim',agents={'Red': B_lineAgent}))
-        #env = (CybORG(path, 'sim'))
         cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
         self.env = cyborg
         self.env_name = 'CybORG'
@@ -154,11 +142,11 @@ class SkyNetBase(BaseAgent):
             self.load()
             print("\nLoaded Training Models\n")
         
-    def load(self):
+    def load(self): #Load weights
         self.Actor.Actor.load_weights(critic_ppo_path+f"{self.Actor_name}")
         self.Critic.Critic.load_weights(actor_ppo_path+f"{self.Critic_name}")
 
-    def save(self):
+    def save(self): #Save weights
         self.Actor.Actor.save_weights(critic_ppo_path+f"{self.Actor_name}",self.Actor_name)
         self.Critic.Critic.save_weights(critic_ppo_path+f"{self.Critic_name}",self.Critic_name)
         
@@ -245,14 +233,14 @@ class SkyNetBase(BaseAgent):
                 self.env.close() 
                 break
             else:
-                self.load()
+                self.load() #Load actors weights
                 while self.episode < self.EPISODES:
                     #self.env.render()
                     # Actor picks an action
                     action, action_onehot, prediction = self.act(state)
                     # Retrieve new state, reward, and whether the state is terminal
                     next_state, reward, done, _ = self.env.step(action)
-                    # Memorize (state, action, reward) for training
+                    # Memorize (state, action, reward, done) for training
                     states.append(state)
                     next_states.append(np.reshape(next_state, [1, self.state_size[0]]))
                     actions.append(action_onehot)
@@ -261,14 +249,15 @@ class SkyNetBase(BaseAgent):
                     predictions.append(prediction)
                     # Update current state
                     state = np.reshape(next_state, [1, self.state_size[0]])
+                    #Incrememt scores and episode
                     score += reward
                     self.episode += 1
-                    #print(dones[self.episode - 1])
+                    
                     average = self.PlotModel(score, self.episode)
                     print("Round: {}, episode: {}/{}, score: {}, average: {:.2f}".format(temp, self.episode, self.EPISODES, score, average))
                     total_score += score
                     total_dev += average
-                    self.save()
+                    self.save() #Save actor weight
                     self.writer.add_scalar(f'Workers:{1}/score_per_episode', score, self.episode)
                     self.writer.add_scalar(f'Workers:{1}/lr', self.lr, self.episode)
                     
@@ -287,37 +276,37 @@ class SkyNetBase(BaseAgent):
                     if temp == self.goes:
                         print("Round:", temp,"Steps:", self.EPISODES*self.goes, "Final Score:", total_score, "Deviation:", total_dev)    
         
-    def PlotModel(self, score, episode):
+    def PlotModel(self, score, episode): #Graph of the steps result
         self.scores_.append(score)
         self.episodes_.append(episode)
         self.average_.append(sum(self.scores_[-50:]) / len(self.scores_[-50:]))
         if str(episode)[-2:] == "00":# much faster than episode % 100
-            pylab.plot(self.episodes_, self.scores_, 'b')
+            #pylab.plot(self.episodes_, self.scores_, 'b')
             pylab.plot(self.episodes_, self.average_, 'r')
             pylab.title(self.env_name+" PPO training cycle", fontsize=18)
             pylab.ylabel('Score', fontsize=18)
             pylab.xlabel('Steps', fontsize=18)
             try:
                 pylab.grid(True)
-                pylab.savefig(self.env_name+".png")
+                pylab.savefig(self.env_name+".png")#Save the training graph result
             except OSError:
                 pass
         # saving best models
         if self.average_[-1] >= self.max_average:
             self.max_average = self.average_[-1]
             self.save()
-            # decreaate learning rate every saved model
+            # decrease learning rate every saved model
             self.lr *= 0.95
             K.set_value(self.Actor.Actor.optimizer.learning_rate, self.lr)
             K.set_value(self.Critic.Critic.optimizer.learning_rate, self.lr)
 
         return self.average_[-1]
         
-    def get_action(self,state,action_space):
-        state = np.reshape(state,(1,11293))
+    def get_action(self,state): #Get the next predicted action and return it
+        state = np.reshape(state,(1,11293)) #Create the same sized state
         action = self.Actor.predict(state)
         prediction = self.Actor.predict(state)[0]
-        action = np.random.choice(self.action_size, p=prediction)
+        action = np.random.choice(self.action_size, p=prediction) #Choose an action
         return action, prediction
             
     def test(self, test_episodes = 100):

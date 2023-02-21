@@ -80,7 +80,7 @@ if __name__ == "__main__":
                 r = []
                 a = []
                 for j in range(num_steps):
-                    action, predictions = agent.get_action(observation, action_space)
+                    action, predictions = agent.get_action(observation)
                     observation, rew, done, info = wrapped_cyborg.step(action)
                     r.append(rew)
                     a.append((str(cyborg.get_last_action('Blue')), str(cyborg.get_last_action('Red'))))
