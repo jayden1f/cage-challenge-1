@@ -24,12 +24,8 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras import backend as K
 from tensorboardX import SummaryWriter 
 from CybORG import CybORG
-from CybORG.Agents.Wrappers.EnumActionWrapper import EnumActionWrapper
-from CybORG.Agents.Wrappers.FixedFlatWrapper import FixedFlatWrapper
-from CybORG.Agents.Wrappers.OpenAIGymWrapper import OpenAIGymWrapper
-from CybORG.Agents.Wrappers.ReduceActionSpaceWrapper import ReduceActionSpaceWrapper
-from CybORG.Agents.SimpleAgents.BaseAgent import BaseAgent
-from CybORG.Agents import B_lineAgent, SleepAgent, RedMeanderAgent #Import all three red agent 
+from CybORG.Agents.Wrappers import * #Import Wrappers
+from CybORG.Agents import * #Import Red Agents including base agent
 
 critic_ppo_path = str(inspect.getfile(CybORG)) #Used to find ppo file path ignoring user's name and directory
 critic_ppo_path = critic_ppo_path[:-10] + "/Evaluation/" #Under the evaluation folder
@@ -110,7 +106,7 @@ class SkyNetBase(BaseAgent):
         #env = (CybORG(path, 'sim')) #Comment this line when using evaluation.py
         env = (CybORG(path, 'sim',agents={'Red': B_lineAgent})) #Comment this line when using SkyNet.py to train
         cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
-        self.env = cyborg
+        self.env = cyborg #Set the environment to env
         self.env_name = 'CybORG'
         self.action_size = self.env.get_action_space('Blue')
         self.state_size = self.env.observation_space.shape
@@ -120,7 +116,6 @@ class SkyNetBase(BaseAgent):
         self.lr = 0.00025
         self.epochs = 10 # training epochs
         self.shuffle=False
-        self.Training_batch = 1000
         self.optimizer = Adam
         self.x_value = 1
         self.y_value = 1
@@ -166,24 +161,25 @@ class SkyNetBase(BaseAgent):
         # Compute discounted rewards and advantages
         advantages, target = self.get_gaes(rewards, dones, np.squeeze(values), np.squeeze(next_values))
 
+        advantages.resize(self.episode,54)
+        predictions.resize(self.episode,54)
+        actions.resize(self.episode,54)
+        
         # stack everything to numpy array
         # pack all advantages, predictions and actions to y_true and when they are received
-        # in custom PPO loss function we unpack it
-        advantages.resize(self.x_value,54)
-        predictions.resize(self.correct,54)
-        actions.resize(self.correct,54)
-        
+        # in custom PPO loss function we unpack it        
         y_true = np.hstack([advantages, predictions, actions])
         target.resize(self.y_value,self.y_value)
-        self.y_value += 1
+        self.y_value += 1 #Increase array size as each iteration
         values.resize(self.episode,self.episode)
         
         # training Actor and Critic networks
-        if score == 0.0:
+        if score == 0.0: #Only add the good result when training
             a_loss = self.Actor.Actor.fit(states, y_true, epochs=self.epochs, verbose=0, shuffle=self.shuffle)
             c_loss = self.Critic.Critic.fit([states, values], target, epochs=self.epochs, verbose=0, shuffle=self.shuffle)
             self.writer.add_scalar('Data/actor_loss_per_replay', np.sum(a_loss.history['loss']), self.replay_count)
             self.writer.add_scalar('Data/critic_loss_per_replay', np.sum(c_loss.history['loss']), self.replay_count)
+            self.save() #Save actor weight
         self.replay_count += 1
         self.x_value += 1
         
@@ -240,7 +236,6 @@ class SkyNetBase(BaseAgent):
             else:
                 self.load() #Load actors weights
                 while self.episode < self.EPISODES:
-                    #self.env.render()
                     # Actor picks an action
                     action, action_onehot, prediction = self.act(state)
                     # Retrieve new state, reward, and whether the state is terminal
@@ -262,21 +257,20 @@ class SkyNetBase(BaseAgent):
                     print("Round: {}, episode: {}/{}, score: {}, average: {:.2f}".format(temp, self.episode, self.EPISODES, score, average))
                     total_score += score
                     total_dev += average
-                    self.save() #Save actor weight
                     self.writer.add_scalar(f'Workers:{1}/score_per_episode', score, self.episode)
                     self.writer.add_scalar(f'Workers:{1}/lr', self.lr, self.episode)
                     
-                    self.replay(states, actions, rewards, predictions, dones, next_states, score)
+                    self.replay(states, actions, rewards, predictions, dones, next_states, score) #
 
                     state, done, score = self.env.reset(), False, 0
                     state = np.reshape(state, [1, self.state_size[0]])
 
-                if self.episode >= self.EPISODES:
+                if self.episode >= self.EPISODES: #Once finish one iteration reset the counter back to 0 and resize the array back to 1
                     temp += 1
                     self.episode = 0
                     self.x_value = 1
                     self.y_value = 1
-                    self.save()
+                    self.save() #Save the model weight and reset the environment
                     self.env.reset()
                     if temp == self.goes:
                         print("Round:", temp,"Steps:", self.EPISODES*self.goes, "Final Score:", total_score, "Deviation:", total_dev)    
@@ -334,5 +328,6 @@ class SkyNetBase(BaseAgent):
         
 if __name__ == "__main__":
     agent = SkyNetBase()
-    agent.run()
-    #agent.test(agent) # train as PPO, train every episode
+    agent.run() #Comment this out when executing evaluation.py
+    #agent.test(agent) # test run not really needed
+ 
