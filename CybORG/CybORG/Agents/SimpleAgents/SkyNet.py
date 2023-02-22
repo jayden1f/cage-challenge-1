@@ -107,8 +107,8 @@ class SkyNetBase(BaseAgent):
     def __init__(self):
         path = str(inspect.getfile(CybORG))
         path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml' 
-        env = (CybORG(path, 'sim')) #Comment this line when using evaluation.py
-        #env = (CybORG(path, 'sim',agents={'Red': B_lineAgent})) #Comment this line when using SkyNet.py to train
+        #env = (CybORG(path, 'sim')) #Comment this line when using evaluation.py
+        env = (CybORG(path, 'sim',agents={'Red': B_lineAgent})) #Comment this line when using SkyNet.py to train
         cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
         self.env = cyborg
         self.env_name = 'CybORG'
@@ -334,5 +334,5 @@ class SkyNetBase(BaseAgent):
         
 if __name__ == "__main__":
     agent = SkyNetBase()
-    #agent.run()
+    agent.run()
     #agent.test(agent) # train as PPO, train every episode
