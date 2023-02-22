@@ -7,7 +7,7 @@ Developed:  Sky TianYi Zhang
             
 Reference: pythonlessons https://pylessons.com/LunarLander-v2-PPO
 
-Last Modified: 14 Feb 2023
+Last Modified: 22 Feb 2023
 '''
 
 import os
@@ -107,7 +107,8 @@ class SkyNetBase(BaseAgent):
     def __init__(self):
         path = str(inspect.getfile(CybORG))
         path = path[:-10] + '/Shared/Scenarios/Scenario1b.yaml' 
-        env = (CybORG(path, 'sim',agents={'Red': B_lineAgent}))
+        env = (CybORG(path, 'sim')) #Comment this line when using evaluation.py
+        #env = (CybORG(path, 'sim',agents={'Red': B_lineAgent})) #Comment this line when using SkyNet.py to train
         cyborg = OpenAIGymWrapper('Blue', EnumActionWrapper(FixedFlatWrapper(ReduceActionSpaceWrapper(env))))
         self.env = cyborg
         self.env_name = 'CybORG'
@@ -126,6 +127,7 @@ class SkyNetBase(BaseAgent):
         self.goes = 10  #10 is max before crashing
         self.Actor_name = "PPO_Actor.h5"
         self.Critic_name = "PPO_Critic.h5"
+        self.correct = 0
         
         self.replay_count = 0
         self.writer = SummaryWriter(comment="_"+self.env_name+"_"+self.optimizer.__name__+"_"+str(self.lr))
@@ -150,7 +152,7 @@ class SkyNetBase(BaseAgent):
         self.Actor.Actor.save_weights(critic_ppo_path+f"{self.Actor_name}",self.Actor_name)
         self.Critic.Critic.save_weights(critic_ppo_path+f"{self.Critic_name}",self.Critic_name)
         
-    def replay(self, states, actions, rewards, predictions, dones, next_states):
+    def replay(self, states, actions, rewards, predictions, dones, next_states, score):
         # reshape memory to appropriate shape for training
         states = np.vstack(states)
         next_states = np.vstack(next_states)
@@ -168,19 +170,22 @@ class SkyNetBase(BaseAgent):
         # pack all advantages, predictions and actions to y_true and when they are received
         # in custom PPO loss function we unpack it
         advantages.resize(self.x_value,54)
-        self.x_value += 1
-
-        y_true = np.hstack([advantages, predictions, actions])
+        predictions.resize(self.correct,54)
+        actions.resize(self.correct,54)
         
-        # training Actor and Critic networks
-        a_loss = self.Actor.Actor.fit(states, y_true, epochs=self.epochs, verbose=0, shuffle=self.shuffle)
+        y_true = np.hstack([advantages, predictions, actions])
         target.resize(self.y_value,self.y_value)
         self.y_value += 1
-        c_loss = self.Critic.Critic.fit([states, values], target, epochs=self.epochs, verbose=0, shuffle=self.shuffle)
-
-        self.writer.add_scalar('Data/actor_loss_per_replay', np.sum(a_loss.history['loss']), self.replay_count)
-        self.writer.add_scalar('Data/critic_loss_per_replay', np.sum(c_loss.history['loss']), self.replay_count)
+        values.resize(self.episode,self.episode)
+        
+        # training Actor and Critic networks
+        if score == 0.0:
+            a_loss = self.Actor.Actor.fit(states, y_true, epochs=self.epochs, verbose=0, shuffle=self.shuffle)
+            c_loss = self.Critic.Critic.fit([states, values], target, epochs=self.epochs, verbose=0, shuffle=self.shuffle)
+            self.writer.add_scalar('Data/actor_loss_per_replay', np.sum(a_loss.history['loss']), self.replay_count)
+            self.writer.add_scalar('Data/critic_loss_per_replay', np.sum(c_loss.history['loss']), self.replay_count)
         self.replay_count += 1
+        self.x_value += 1
         
     def get_gaes(self, rewards, dones, values, next_values, gamma = 0.99, lamda = 0.9, normalize=True):
         r = rewards
@@ -252,7 +257,7 @@ class SkyNetBase(BaseAgent):
                     #Incrememt scores and episode
                     score += reward
                     self.episode += 1
-                    
+                    self.correct += 1
                     average = self.PlotModel(score, self.episode)
                     print("Round: {}, episode: {}/{}, score: {}, average: {:.2f}".format(temp, self.episode, self.EPISODES, score, average))
                     total_score += score
@@ -261,7 +266,7 @@ class SkyNetBase(BaseAgent):
                     self.writer.add_scalar(f'Workers:{1}/score_per_episode', score, self.episode)
                     self.writer.add_scalar(f'Workers:{1}/lr', self.lr, self.episode)
                     
-                    self.replay(states, actions, rewards, predictions, dones, next_states)
+                    self.replay(states, actions, rewards, predictions, dones, next_states, score)
 
                     state, done, score = self.env.reset(), False, 0
                     state = np.reshape(state, [1, self.state_size[0]])
@@ -283,7 +288,7 @@ class SkyNetBase(BaseAgent):
         if str(episode)[-2:] == "00":# much faster than episode % 100
             #pylab.plot(self.episodes_, self.scores_, 'b')
             pylab.plot(self.episodes_, self.average_, 'r')
-            pylab.title(self.env_name+" PPO training cycle", fontsize=18)
+            pylab.title(self.env_name + " PPO training cycle", fontsize=18)
             pylab.ylabel('Score', fontsize=18)
             pylab.xlabel('Steps', fontsize=18)
             try:
@@ -311,8 +316,7 @@ class SkyNetBase(BaseAgent):
             
     def test(self, test_episodes = 100):
         self.load()
-        e=0
-        #for e in range(100):
+        e = 0
         state = self.env.reset()
         state = np.reshape(state, [1, self.state_size[0]])
         done = False
@@ -330,5 +334,5 @@ class SkyNetBase(BaseAgent):
         
 if __name__ == "__main__":
     agent = SkyNetBase()
-    agent.run()
+    #agent.run()
     #agent.test(agent) # train as PPO, train every episode
