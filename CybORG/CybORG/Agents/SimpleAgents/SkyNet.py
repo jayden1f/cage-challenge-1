@@ -119,7 +119,7 @@ class SkyNetBase(BaseAgent):
         self.optimizer = Adam
         self.x_value = 1
         self.y_value = 1
-        self.goes = 10  #10 is max before crashing
+        self.goes = 1  #10 is max before crashing
         self.Actor_name = "PPO_Actor.h5"
         self.Critic_name = "PPO_Critic.h5"
         self.correct = 0
@@ -132,12 +132,15 @@ class SkyNetBase(BaseAgent):
 
         self.Actor = Actor_Model(input_shape=self.state_size, action_space = self.action_size, lr=self.lr, optimizer = self.optimizer)
         self.Critic = Critic_Model(input_shape=self.state_size, action_space = self.action_size, lr=self.lr, optimizer = self.optimizer)
-        self.save()
 
+        validateFile = actor_ppo_path+"PPO_Actor.h5"
         # Create Actor-Critic network models
-        if os.path.exists(actor_ppo_path):
+        if os.path.isfile(validateFile) == True: #Check if the file is there, if it is load it, else create a new model weight
             self.load()
             print("\nLoaded Training Models\n")
+        else:
+            self.save()
+            print("\nCreated New Training Models\n")
         
     def load(self): #Load weights
         self.Actor.Actor.load_weights(critic_ppo_path+f"{self.Actor_name}")
@@ -266,14 +269,14 @@ class SkyNetBase(BaseAgent):
                     state = np.reshape(state, [1, self.state_size[0]])
 
                 if self.episode >= self.EPISODES: #Once finish one iteration reset the counter back to 0 and resize the array back to 1
-                    temp += 1
                     self.episode = 0
                     self.x_value = 1
                     self.y_value = 1
                     self.save() #Save the model weight and reset the environment
                     self.env.reset()
-                    if temp == self.goes:
+                    if temp < self.goes:
                         print("Round:", temp,"Steps:", self.EPISODES*self.goes, "Final Score:", total_score, "Deviation:", total_dev)    
+                    temp += 1
         
     def PlotModel(self, score, episode): #Graph of the steps result
         self.scores_.append(score)
